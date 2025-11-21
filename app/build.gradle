@@ -16,7 +16,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.amaze.filemanager"
+        applicationId "com.amaze.filemanager.openad"
         minSdkVersion libs.versions.minSdk.get().toInteger()
         targetSdkVersion libs.versions.targetSdk.get().toInteger()
         versionCode 121
@@ -79,6 +79,8 @@ android {
             dimension 'static'
             buildConfigField "boolean", "IS_VERSION_FDROID", "false"
             signingConfig signingConfigs.config
+            // play-services-ads:24.4.0 要求 minSdkVersion >= 23
+            minSdkVersion 23
         }
     }
 
@@ -145,6 +147,7 @@ dependencies {
     implementation libs.androidX.constraintLayout
     implementation libs.androidX.multidex //Multiple dex files
     implementation libs.androidX.biometric
+    implementation libs.androidX.lifecycle.process
     implementation libs.room.runtime
     implementation libs.room.rxjava2
 
@@ -204,6 +207,8 @@ dependencies {
     playImplementation libs.cloudrail.si.android
     playImplementation libs.junrar
     playImplementation libs.google.play.billing
+    playImplementation libs.google.play.services.ads
+    playImplementation libs.user.messaging.platform
 
     implementation libs.mpAndroidChart//Nice charts and graphs
 

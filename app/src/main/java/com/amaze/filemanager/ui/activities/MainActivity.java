@@ -1158,6 +1158,17 @@ public class MainActivity extends PermissionsActivity
       menu.findItem(R.id.extract).setVisible(true);
       invalidatePasteSnackbar(false);
     }
+    
+    // 控制 AdMob 相关菜单项的可见性（仅在 play flavor 中显示）
+    MenuItem privacySettings = menu.findItem(R.id.privacy_settings);
+    MenuItem adInspector = menu.findItem(R.id.ad_inspector);
+    if (privacySettings != null) {
+      privacySettings.setVisible(!BuildConfig.IS_VERSION_FDROID);
+    }
+    if (adInspector != null) {
+      adInspector.setVisible(!BuildConfig.IS_VERSION_FDROID);
+    }
+    
     return super.onPrepareOptionsMenu(menu);
   }
 
@@ -1279,6 +1290,12 @@ public class MainActivity extends PermissionsActivity
             }
           } else if (item.getItemId() == R.id.search) {
             getAppbar().getSearchView().revealSearchView();
+          } else if (item.getItemId() == R.id.privacy_settings) {
+            // 打开隐私设置
+            handlePrivacySettings();
+          } else if (item.getItemId() == R.id.ad_inspector) {
+            // 打开 Ad Inspector
+            handleAdInspector();
           }
           return null;
         },
@@ -2568,6 +2585,84 @@ public class MainActivity extends PermissionsActivity
       if (showToastIfMainFragmentIsNull) {
         AppConfig.toast(this, R.string.operation_unsuccesful);
       }
+    }
+  }
+
+  /**
+   * 处理隐私设置
+   */
+  private void handlePrivacySettings() {
+    if (BuildConfig.IS_VERSION_FDROID) {
+      // F-Droid 版本不支持 AdMob
+      return;
+    }
+    
+    try {
+      // 使用反射调用 play flavor 中的类
+      Class<?> consentManagerClass = Class.forName("com.amaze.filemanager.ads.GoogleMobileAdsConsentManager");
+      Object consentManager = consentManagerClass.getConstructor(Activity.class).newInstance(this);
+      
+      // 重置同意状态
+      consentManagerClass.getMethod("resetConsent").invoke(consentManager);
+      consentManagerClass.getMethod("initializeConsentInformation").invoke(consentManager);
+      
+      // 延迟显示同意表单，等待初始化完成
+      new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+        try {
+          // 使用反射调用辅助类
+          Class<?> helperClass = Class.forName("com.amaze.filemanager.ads.ConsentManagerHelper");
+          helperClass.getMethod("showConsentForm", Activity.class, consentManagerClass)
+              .invoke(null, MainActivity.this, consentManager);
+        } catch (Exception e) {
+          LOG.error("Failed to show privacy settings", e);
+          Toast.makeText(MainActivity.this, "Failed to open privacy settings", Toast.LENGTH_SHORT).show();
+        }
+      }, 1000);
+    } catch (Exception e) {
+      LOG.error("Failed to handle privacy settings", e);
+      Toast.makeText(this, "Failed to open privacy settings", Toast.LENGTH_SHORT).show();
+    }
+  }
+
+  /**
+   * 处理 Ad Inspector
+   */
+  private void handleAdInspector() {
+    if (BuildConfig.IS_VERSION_FDROID) {
+      // F-Droid 版本不支持 AdMob
+      return;
+    }
+    
+    try {
+      // 使用反射调用 AdMob API
+      Class<?> mobileAdsClass = Class.forName("com.google.android.gms.ads.MobileAds");
+      Class<?> listenerClass = Class.forName("com.google.android.gms.ads.OnAdInspectorClosedListener");
+      
+      Object listener = java.lang.reflect.Proxy.newProxyInstance(
+          listenerClass.getClassLoader(),
+          new Class[]{listenerClass},
+          (proxy, method, args) -> {
+            if (method.getName().equals("onAdInspectorClosed")) {
+              Object adError = args[0];
+              if (adError != null) {
+                String message = (String) adError.getClass().getMethod("getMessage").invoke(adError);
+                LOG.error("Ad Inspector closed with error: " + message);
+                Toast.makeText(MainActivity.this, 
+                    "Ad Inspector error: " + message, 
+                    Toast.LENGTH_SHORT).show();
+              } else {
+                LOG.info("Ad Inspector closed successfully");
+              }
+            }
+            return null;
+          }
+      );
+      
+      mobileAdsClass.getMethod("openAdInspector", Activity.class, listenerClass)
+          .invoke(null, this, listener);
+    } catch (Exception e) {
+      LOG.error("Failed to open Ad Inspector", e);
+      Toast.makeText(this, "Failed to open Ad Inspector", Toast.LENGTH_SHORT).show();
     }
   }
 }

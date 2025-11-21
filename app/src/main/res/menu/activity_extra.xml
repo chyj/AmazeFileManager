@@ -65,5 +65,15 @@
         android:id="@+id/exit"
         android:title="@string/exit"
         android:orderInCategory="100"/>
+    
+    <!-- AdMob 相关菜单项（仅在 play flavor 中显示） -->
+    <item
+        android:id="@+id/privacy_settings"
+        android:title="@string/privacy_settings"
+        android:orderInCategory="90"/>
+    <item
+        android:id="@+id/ad_inspector"
+        android:title="@string/ad_inspector"
+        android:orderInCategory="91"/>
 
 </menu>
