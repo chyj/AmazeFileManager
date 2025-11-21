@@ -457,11 +457,21 @@ object NetCopyClientConnectionPool {
         override fun create(uri: String): FTPClient {
             return (
                 if (uri.startsWith(FTPS_URI_PREFIX)) {
-                    FTPSClient(
-                        "TLS",
-                        !uri.contains(QUESTION_MARK) ||
-                            !uri.substringAfter(QUESTION_MARK).contains("$ARG_TLS=$TLS_EXPLICIT"),
-                    )
+                    val isImplicit = !uri.contains(QUESTION_MARK) ||
+                        !uri.substringAfter(QUESTION_MARK).contains("$ARG_TLS=$TLS_EXPLICIT")
+                    // 使用 TLSv1.2 作为协议版本，避免协议版本协商失败
+                    // 如果 TLSv1.2 不可用，回退到 TLS（让系统自动协商）
+                    try {
+                        FTPSClient("TLSv1.2", isImplicit)
+                    } catch (e: Exception) {
+                        LOG.debug("Failed to create FTPSClient with TLSv1.2, trying TLS", e)
+                        try {
+                            FTPSClient("TLSv1.3", isImplicit)
+                        } catch (e2: Exception) {
+                            LOG.debug("Failed to create FTPSClient with TLSv1.3, trying TLS", e2)
+                            FTPSClient("TLS", isImplicit)
+                        }
+                    }
                 } else {
                     FTPClient()
                 }
