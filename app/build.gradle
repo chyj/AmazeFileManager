@@ -16,7 +16,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.amaze.filemanager"
+        applicationId "com.amaze.filemanager.interstitial"
         minSdkVersion libs.versions.minSdk.get().toInteger()
         targetSdkVersion libs.versions.targetSdk.get().toInteger()
         versionCode 121
@@ -204,6 +204,8 @@ dependencies {
     playImplementation libs.cloudrail.si.android
     playImplementation libs.junrar
     playImplementation libs.google.play.billing
+    playImplementation libs.google.play.services.ads
+    playImplementation libs.google.ump
 
     implementation libs.mpAndroidChart//Nice charts and graphs
 

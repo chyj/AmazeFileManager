@@ -277,6 +277,9 @@ public class MainActivity extends PermissionsActivity
   private WeakReference<Toast> toast = new WeakReference<>(null);
   private Intent intent;
   private View indicator_layout;
+  
+  // AdMob 相关字段（仅在 play flavor 中使用）
+  private boolean isFirstLaunch = true; // 标记是否为首次启动，避免首次进入就显示广告
 
   private AppBarLayout appBarLayout;
 
@@ -371,6 +374,9 @@ public class MainActivity extends PermissionsActivity
     initialiseFab(); // TODO: 7/12/2017 not init when actionIntent != null
     mainActivityHelper = new MainActivityHelper(this);
     mainActivityActionMode = new MainActivityActionMode(new WeakReference<>(MainActivity.this));
+    
+    // 初始化 AdMob（仅在 play flavor 中）
+    initializeAdMobIfAvailable();
 
     if (CloudSheetFragment.isCloudProviderAvailable(this)) {
       try {
@@ -1461,6 +1467,70 @@ public class MainActivity extends PermissionsActivity
     NetCopyClientConnectionPool.INSTANCE.shutdown();
     if (drawer != null && drawer.getBilling() != null) {
       drawer.getBilling().destroyBillingInstance();
+    }
+    
+    // 清理 AdMob 资源（仅在 play flavor 中）
+    cleanupAdMobIfAvailable();
+  }
+  
+  /**
+   * 初始化 AdMob（仅在 play flavor 中可用）
+   */
+  private void initializeAdMobIfAvailable() {
+    try {
+      Class<?> adMobHelperClass = Class.forName("com.amaze.filemanager.ui.activities.MainActivityAdMobHelper");
+      java.lang.reflect.Constructor<?> constructor = adMobHelperClass.getConstructor(Activity.class);
+      Object adMobHelper = constructor.newInstance(this);
+      
+      // 调用 initialize 方法
+      java.lang.reflect.Method initMethod = adMobHelperClass.getMethod("initialize");
+      initMethod.invoke(adMobHelper);
+      
+      // 保存引用以便后续使用
+      // 注意：由于是反射调用，无法直接保存为字段，可以通过静态 Map 或其他方式管理
+      LOG.info("AdMob 初始化成功");
+    } catch (ClassNotFoundException e) {
+      // play flavor 的类不存在，这是正常的（fdroid flavor）
+      LOG.debug("AdMob 类未找到，跳过初始化（可能是 fdroid flavor）");
+    } catch (Exception e) {
+      LOG.warn("AdMob 初始化失败", e);
+    }
+  }
+  
+  /**
+   * 尝试显示插页式广告（仅在 play flavor 中可用）
+   * 应在合适的业务触发点调用
+   */
+  private void tryShowInterstitialAdIfAvailable() {
+    try {
+      Class<?> adMobHelperClass = Class.forName("com.amaze.filemanager.ui.activities.MainActivityAdMobHelper");
+      java.lang.reflect.Constructor<?> constructor = adMobHelperClass.getConstructor(Activity.class);
+      Object adMobHelper = constructor.newInstance(this);
+      
+      java.lang.reflect.Method showMethod = adMobHelperClass.getMethod("tryShowInterstitialAd");
+      showMethod.invoke(adMobHelper);
+    } catch (ClassNotFoundException e) {
+      // play flavor 的类不存在，跳过
+    } catch (Exception e) {
+      LOG.warn("显示插页式广告失败", e);
+    }
+  }
+  
+  /**
+   * 清理 AdMob 资源（仅在 play flavor 中可用）
+   */
+  private void cleanupAdMobIfAvailable() {
+    try {
+      Class<?> adMobHelperClass = Class.forName("com.amaze.filemanager.ui.activities.MainActivityAdMobHelper");
+      java.lang.reflect.Constructor<?> constructor = adMobHelperClass.getConstructor(Activity.class);
+      Object adMobHelper = constructor.newInstance(this);
+      
+      java.lang.reflect.Method cleanupMethod = adMobHelperClass.getMethod("cleanup");
+      cleanupMethod.invoke(adMobHelper);
+    } catch (ClassNotFoundException e) {
+      // play flavor 的类不存在，跳过
+    } catch (Exception e) {
+      LOG.warn("清理 AdMob 资源失败", e);
     }
   }
 

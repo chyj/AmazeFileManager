@@ -112,6 +112,27 @@ public class AppConfig extends GlideApplication {
     // disabling file exposure method check for api n+
     StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
     StrictMode.setVmPolicy(builder.build());
+    
+    // 初始化 AdMob（仅在 play flavor 中）
+    initializeAdMobIfAvailable();
+  }
+  
+  /**
+   * 初始化 AdMob（仅在 play flavor 中可用）
+   */
+  private void initializeAdMobIfAvailable() {
+    try {
+      // 使用反射检查 play flavor 的类是否存在
+      Class<?> adMobClass = Class.forName("com.amaze.filemanager.application.AppConfigAdMob");
+      java.lang.reflect.Method initMethod = adMobClass.getMethod("initializeAdMob", Context.class);
+      initMethod.invoke(null, this);
+      log.info("AdMob 初始化成功");
+    } catch (ClassNotFoundException e) {
+      // play flavor 的类不存在，这是正常的（fdroid flavor）
+      log.debug("AdMob 类未找到，跳过初始化（可能是 fdroid flavor）");
+    } catch (Exception e) {
+      log.warn("AdMob 初始化失败", e);
+    }
   }
 
   @Override

@@ -86,6 +86,7 @@ import com.amaze.filemanager.utils.OTGUtil;
 import com.amaze.filemanager.utils.Utils;
 import com.google.android.material.appbar.AppBarLayout;
 
+import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipDescription;
@@ -481,6 +482,8 @@ public class MainFragment extends Fragment
             // don't open file hierarchy for trash bin
             adapter.toggleChecked(position, imageView);
           } else {
+            // 尝试显示插页式广告（仅在 play flavor 中）
+            tryShowInterstitialAdIfAvailable();
             computeScroll();
             loadlist(path, false, mainFragmentViewModel.getOpenMode(), false);
           }
@@ -1588,5 +1591,23 @@ public class MainFragment extends Fragment
     }
 
     loadViews();
+  }
+  
+  /**
+   * 尝试显示插页式广告（仅在 play flavor 中可用）
+   */
+  private void tryShowInterstitialAdIfAvailable() {
+    try {
+      Class<?> adMobHelperClass = Class.forName("com.amaze.filemanager.ui.activities.MainActivityAdMobHelper");
+      java.lang.reflect.Constructor<?> constructor = adMobHelperClass.getConstructor(Activity.class);
+      Object adMobHelper = constructor.newInstance(requireMainActivity());
+      
+      java.lang.reflect.Method showMethod = adMobHelperClass.getMethod("tryShowInterstitialAd");
+      showMethod.invoke(adMobHelper);
+    } catch (ClassNotFoundException e) {
+      // play flavor 的类不存在，跳过（fdroid flavor）
+    } catch (Exception e) {
+      LOG.warn("显示插页式广告失败", e);
+    }
   }
 }

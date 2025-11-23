@@ -74,6 +74,10 @@ concurrentTrees = "2.6.1"
 aboutLibraries = "6.1.1"
 amazeTrashBin = "1.0.10"
 
+# Google AdMob
+googlePlayServicesAds = "23.5.0"
+googleUmp = "2.1.0"
+
 [libraries]
 gradle = { module = "com.android.tools.build:gradle", version.ref = "gradle" }
 jacoco-android-plugin = { module = "com.mxalbert.gradle:jacoco-android", version.ref = "jacocoAndroid" }
@@ -176,3 +180,6 @@ acra-core = { module = "ch.acra:acra-core", version.ref = "acraCore" }
 leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanaryAndroid" }
 
 amaze-trashBin = { module = "com.github.TeamAmaze:AmazeTrashBin", version.ref = "amazeTrashBin" }
+
+google-play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "googlePlayServicesAds" }
+google-ump = { module = "com.google.android.ump:user-messaging-platform", version.ref = "googleUmp" }
