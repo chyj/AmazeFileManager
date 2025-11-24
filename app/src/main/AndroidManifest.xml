@@ -58,7 +58,13 @@
         android:requestLegacyExternalStorage="true"
         android:banner="@drawable/about_header"
         android:localeConfig="@xml/locales_config"
-        android:networkSecurityConfig="@xml/network_security_config">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:hardwareAccelerated="true">
+        
+        <!-- AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
 
         <activity
             android:exported="true"
@@ -68,7 +74,7 @@
             android:theme="@style/appCompatBlack"
             android:configChanges="uiMode"
             android:windowSoftInputMode="adjustPan"
-           >
+            android:hardwareAccelerated="true">
 
             <intent-filter android:label="@string/appbar_name">
                 <action android:name="android.intent.action.MAIN" />

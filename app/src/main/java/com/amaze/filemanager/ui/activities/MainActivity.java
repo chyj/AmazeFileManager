@@ -285,6 +285,10 @@ public class MainActivity extends PermissionsActivity
   private CloudHandler cloudHandler;
   private CloudLoaderAsyncTask cloudLoaderAsyncTask;
 
+  // AdMob 原生广告相关（仅在 Play 版本中使用）
+  private Object nativeAdHelper; // 使用 Object 避免编译时依赖
+  private android.widget.FrameLayout adContainer;
+
   /**
    * This is for a hack.
    *
@@ -371,6 +375,11 @@ public class MainActivity extends PermissionsActivity
     initialiseFab(); // TODO: 7/12/2017 not init when actionIntent != null
     mainActivityHelper = new MainActivityHelper(this);
     mainActivityActionMode = new MainActivityActionMode(new WeakReference<>(MainActivity.this));
+
+    // 初始化 AdMob 原生广告（仅在 Play 版本）
+    if (!BuildConfig.IS_VERSION_FDROID) {
+      initializeNativeAd();
+    }
 
     if (CloudSheetFragment.isCloudProviderAvailable(this)) {
       try {
@@ -1462,6 +1471,16 @@ public class MainActivity extends PermissionsActivity
     if (drawer != null && drawer.getBilling() != null) {
       drawer.getBilling().destroyBillingInstance();
     }
+    // 销毁原生广告（使用反射）
+    if (nativeAdHelper != null) {
+      try {
+        java.lang.reflect.Method destroyMethod = nativeAdHelper.getClass().getMethod("destroy");
+        destroyMethod.invoke(nativeAdHelper);
+      } catch (Exception e) {
+        LOG.error("Failed to destroy native ad helper", e);
+      }
+      nativeAdHelper = null;
+    }
   }
 
   /** Closes the interactive shell and threads associated */
@@ -1923,6 +1942,342 @@ public class MainActivity extends PermissionsActivity
     }
 
     return floatingActionButton.addActionItem(builder.create());
+  }
+
+  /**
+   * 初始化 AdMob 原生广告（仅在 Play 版本）
+   * 使用反射避免编译时依赖
+   * 
+   * 注意：广告现在作为列表项显示在 RecyclerView 中，不再使用 adContainer
+   */
+  private void initializeNativeAd() {
+    LOG.info("========== MainActivity: 开始初始化原生广告 ==========");
+    LOG.info("MainActivity: BuildConfig.IS_VERSION_FDROID={}", BuildConfig.IS_VERSION_FDROID);
+    LOG.info("MainActivity: 原生广告将作为列表项显示在 RecyclerView 中");
+    
+    // 直接初始化 NativeAdHelper，不查找 adContainer
+    // 广告将通过 RecyclerAdapter 作为列表项显示
+    getWindow().getDecorView().post(() -> {
+      try {
+        int adContainerId = 0;
+        String methodUsed = "";
+        
+        // 方法1: 直接使用 R.id.ad_container（最直接，因为它在 main 源码集中）
+        try {
+          java.lang.reflect.Field field = R.id.class.getField("ad_container");
+          adContainerId = field.getInt(null);
+          methodUsed = "R.id reflection";
+          LOG.info("MainActivity: ✅ ad_container ID (via R.id reflection)={}", adContainerId);
+        } catch (NoSuchFieldException e) {
+          LOG.warn("MainActivity: ⚠️ R.id.ad_container field not found: {}", e.getMessage());
+          LOG.warn("MainActivity: 这可能意味着资源还没有被编译，或者 ad_container 不在当前布局中");
+          
+          // 列出所有 R.id 字段以调试
+          try {
+            java.lang.reflect.Field[] allFields = R.id.class.getFields();
+            LOG.info("MainActivity: R.id 类共有 {} 个字段", allFields.length);
+            boolean foundSimilar = false;
+            for (java.lang.reflect.Field f : allFields) {
+              if (f.getName().toLowerCase().contains("container") || 
+                  f.getName().toLowerCase().contains("ad")) {
+                LOG.info("MainActivity: 找到相关字段: R.id.{} = {}", f.getName(), f.getInt(null));
+                foundSimilar = true;
+              }
+            }
+            if (!foundSimilar && allFields.length > 0) {
+              LOG.info("MainActivity: 前5个 R.id 字段示例:");
+              for (int i = 0; i < Math.min(5, allFields.length); i++) {
+                LOG.info("MainActivity:   R.id.{} = {}", allFields[i].getName(), allFields[i].getInt(null));
+              }
+            }
+          } catch (Exception debugEx) {
+            LOG.warn("MainActivity: 无法列出 R.id 字段: {}", debugEx.getMessage());
+          }
+          
+          // 方法2: 使用 getIdentifier
+          adContainerId = getResources().getIdentifier("ad_container", "id", getPackageName());
+          methodUsed = "getIdentifier";
+          LOG.info("MainActivity: ad_container ID (via getIdentifier)={}, packageName={}", adContainerId, getPackageName());
+        } catch (Exception e) {
+          LOG.warn("MainActivity: ⚠️ Error accessing R.id.ad_container: {}", e.getMessage());
+          // 方法2: 使用 getIdentifier
+          adContainerId = getResources().getIdentifier("ad_container", "id", getPackageName());
+          methodUsed = "getIdentifier fallback";
+          LOG.info("MainActivity: ad_container ID (via getIdentifier fallback)={}", adContainerId);
+        }
+        
+        final int finalAdContainerId = adContainerId;
+        final String finalMethodUsed = methodUsed;
+        
+        if (finalAdContainerId == 0) {
+          LOG.error("MainActivity: ❌ Ad container ID is 0, 无法找到 ad_container 资源");
+          LOG.error("MainActivity: 尝试的方法: {}", finalMethodUsed);
+          LOG.error("MainActivity: 请检查 main_toolbar.xml 中是否存在 android:id=\"@+id/ad_container\"");
+          LOG.error("MainActivity: 当前布局文件: R.layout.main_toolbar={}", R.layout.main_toolbar);
+          
+          // 尝试列出所有可用的 ID 字段（调试用）
+          try {
+            java.lang.reflect.Field[] fields = R.id.class.getFields();
+            LOG.info("MainActivity: 可用的 R.id 字段数量: {}", fields.length);
+            // 只列出前10个作为示例
+            for (int i = 0; i < Math.min(10, fields.length); i++) {
+              LOG.info("MainActivity: R.id.{} = {}", fields[i].getName(), fields[i].getInt(null));
+            }
+          } catch (Exception e) {
+            LOG.warn("MainActivity: 无法列出 R.id 字段: {}", e.getMessage());
+          }
+          return;
+        }
+        
+        adContainer = findViewById(finalAdContainerId);
+        LOG.info("MainActivity: ad_container view={}, ID={}, method={}", 
+            adContainer != null, finalAdContainerId, finalMethodUsed);
+        
+        if (adContainer == null) {
+          LOG.error("MainActivity: ❌ Ad container view is null, ID={}", finalAdContainerId);
+          LOG.error("MainActivity: 可能布局还未完全加载，或者 ad_container 不在当前布局中");
+          // 再次尝试延迟查找
+          getWindow().getDecorView().postDelayed(() -> {
+            adContainer = findViewById(finalAdContainerId);
+            if (adContainer != null) {
+              LOG.info("MainActivity: ✅ Ad container found (delayed), 继续初始化");
+              continueNativeAdInitialization();
+            } else {
+              LOG.error("MainActivity: ❌ Ad container still not found after delay");
+            }
+          }, 500);
+          return;
+        }
+        
+        LOG.info("MainActivity: ✅ Ad container found, 继续初始化");
+        continueNativeAdInitialization();
+      } catch (Exception e) {
+        LOG.error("MainActivity: ❌ 初始化原生广告失败", e);
+        LOG.error("MainActivity: 错误详情: {}", e.getMessage(), e);
+        e.printStackTrace();
+      }
+    });
+  }
+
+  /**
+   * 继续原生广告初始化
+   * 广告将通过 RecyclerAdapter 作为列表项显示，不再使用 adContainer
+   */
+  private void continueNativeAdInitialization() {
+    
+    try {
+      // 使用反射初始化用户同意管理
+      LOG.info("MainActivity: 初始化用户同意管理...");
+      Class<?> consentManagerClass = Class.forName("com.amaze.filemanager.ui.ads.GoogleMobileAdsConsentManager");
+      
+      // 获取 Companion 对象（Kotlin companion object）
+      java.lang.reflect.Field companionField = consentManagerClass.getDeclaredField("Companion");
+      companionField.setAccessible(true);
+      Object companion = companionField.get(null);
+      
+      // 通过 Companion 调用 getInstance
+      java.lang.reflect.Method getInstanceMethod = companion.getClass().getMethod("getInstance");
+      Object consentManager = getInstanceMethod.invoke(companion);
+      LOG.info("MainActivity: ✅ ConsentManager 实例获取成功");
+      
+      java.lang.reflect.Method initializeMethod = consentManagerClass.getMethod("initialize", Activity.class);
+      initializeMethod.invoke(consentManager, this);
+      LOG.info("MainActivity: ✅ 用户同意管理初始化完成");
+
+      // 使用反射创建原生广告辅助类
+      LOG.info("MainActivity: 创建 NativeAdHelper...");
+      Class<?> nativeAdHelperClass = Class.forName("com.amaze.filemanager.ui.ads.NativeAdHelper");
+      Class<?> lifecycleOwnerClass = Class.forName("androidx.lifecycle.LifecycleOwner");
+      java.lang.reflect.Constructor<?> constructor = nativeAdHelperClass.getConstructor(Context.class, lifecycleOwnerClass);
+      nativeAdHelper = constructor.newInstance(this, this);
+      LOG.info("MainActivity: ✅ NativeAdHelper 创建成功");
+
+      // 使用反射初始化 AdMob SDK
+      LOG.info("MainActivity: 初始化 AdMob SDK...");
+      // NativeAdHelper.initialize 接受一个 Runnable 类型的参数（Kotlin 函数类型）
+      // 需要使用 kotlin.jvm.functions.Function0 或者直接传递 Runnable
+      try {
+        // 尝试使用 Function0（Kotlin 函数类型）
+        Class<?> function0Class = Class.forName("kotlin.jvm.functions.Function0");
+        java.lang.reflect.Method initializeMethod2 = nativeAdHelperClass.getMethod("initialize", function0Class);
+        Object kotlinFunction = java.lang.reflect.Proxy.newProxyInstance(
+            function0Class.getClassLoader(),
+            new Class<?>[]{function0Class},
+            (proxy, method, args) -> {
+              if (method.getName().equals("invoke")) {
+                LOG.info("MainActivity: ✅ AdMob SDK 初始化完成，开始加载广告");
+                loadNativeAd();
+                return null;
+              }
+              return method.invoke(proxy, args);
+            }
+        );
+        initializeMethod2.invoke(nativeAdHelper, kotlinFunction);
+      } catch (Exception e) {
+        // 如果 Function0 方法失败，尝试使用 Runnable（Java 8 函数式接口）
+        LOG.warn("MainActivity: Function0 方法失败，尝试 Runnable: {}", e.getMessage());
+        try {
+          java.lang.reflect.Method initializeMethod2 = nativeAdHelperClass.getMethod("initialize", Runnable.class);
+          initializeMethod2.invoke(nativeAdHelper, (Runnable) () -> {
+            LOG.info("MainActivity: ✅ AdMob SDK 初始化完成，开始加载广告");
+            loadNativeAd();
+          });
+        } catch (Exception e2) {
+          LOG.error("MainActivity: ❌ 无法调用 initialize 方法", e2);
+          LOG.error("MainActivity: 可用方法列表:");
+          for (java.lang.reflect.Method m : nativeAdHelperClass.getMethods()) {
+            if (m.getName().equals("initialize")) {
+              LOG.error("MainActivity:   initialize({})", java.util.Arrays.toString(m.getParameterTypes()));
+            }
+          }
+        }
+      }
+    } catch (ClassNotFoundException e) {
+      LOG.error("MainActivity: ❌ 找不到广告相关类", e);
+    } catch (NoSuchMethodException e) {
+      LOG.error("MainActivity: ❌ 找不到广告相关方法", e);
+    } catch (Exception e) {
+      LOG.error("MainActivity: ❌ 初始化原生广告失败", e);
+      LOG.error("MainActivity: 错误详情: {}", e.getMessage(), e);
+    }
+  }
+
+  /**
+   * 加载原生广告（使用反射）
+   * 注意：此方法已不再使用，广告现在通过 RecyclerAdapter 作为列表项加载
+   * 保留此方法仅用于向后兼容，实际不会执行
+   */
+  private void loadNativeAd() {
+    LOG.info("========== MainActivity: loadNativeAd 被调用，但广告现在通过 RecyclerAdapter 加载 ==========");
+    LOG.info("MainActivity: nativeAdHelper={}, isDestroyed={}, isFinishing={}", 
+        nativeAdHelper != null, isDestroyed(), isFinishing());
+    
+    // 广告现在通过 RecyclerAdapter 作为列表项加载，不再在这里加载
+    LOG.info("MainActivity: 广告将通过 RecyclerAdapter 作为列表项显示，跳过此处的加载");
+    return;
+    
+    /* 以下代码已禁用，广告现在通过 RecyclerAdapter 加载
+    if (nativeAdHelper == null || isDestroyed() || isFinishing()) {
+      LOG.warn("MainActivity: ⚠️ 条件不满足，跳过加载广告");
+      return;
+    }
+
+    try {
+      Class<?> nativeAdHelperClass = nativeAdHelper.getClass();
+      
+      // Kotlin 函数类型 (NativeAd) -> Unit 在 Java 中是 Function1<NativeAd, Unit>
+      // Kotlin 函数类型 (String) -> Unit 在 Java 中是 Function1<String, Unit>
+      Class<?> function1Class = Class.forName("kotlin.jvm.functions.Function1");
+      Class<?> unitClass = Class.forName("kotlin.Unit");
+      
+      LOG.info("MainActivity: 查找 loadNativeAd 方法...");
+      java.lang.reflect.Method loadNativeAdMethod = nativeAdHelperClass.getMethod(
+          "loadNativeAd",
+          String.class,
+          function1Class,
+          function1Class
+      );
+      LOG.info("MainActivity: ✅ loadNativeAd 方法找到");
+
+      // 创建成功回调 Function1<NativeAd, Unit>
+      Object onAdLoaded = java.lang.reflect.Proxy.newProxyInstance(
+          function1Class.getClassLoader(),
+          new Class<?>[]{function1Class},
+          (proxy, method, args) -> {
+            if (method.getName().equals("invoke")) {
+              Object nativeAd = args[0]; // Function1.invoke(NativeAd) -> Unit
+              LOG.info("MainActivity: ✅✅✅ 原生广告加载成功回调");
+              runOnUiThread(() -> {
+                LOG.info("MainActivity: 在主线程处理广告显示");
+                if (adContainer == null || isDestroyed() || isFinishing()) {
+                  LOG.warn("MainActivity: ⚠️ Activity 状态异常，销毁广告");
+                  try {
+                    java.lang.reflect.Method destroyMethod = nativeAd.getClass().getMethod("destroy");
+                    destroyMethod.invoke(nativeAd);
+                  } catch (Exception e) {
+                    LOG.error("MainActivity: ❌ 销毁广告失败", e);
+                  }
+                  return;
+                }
+
+                try {
+                  // 使用反射加载广告布局（ad_unified 在 play flavor 中）
+                  int layoutId = getResources().getIdentifier("ad_unified", "layout", getPackageName());
+                  LOG.info("MainActivity: ad_unified layout ID={}", layoutId);
+                  if (layoutId == 0) {
+                    LOG.warn("MainActivity: ⚠️ ad_unified 布局未找到，可能不在 play flavor 中");
+                    return;
+                  }
+                  android.view.LayoutInflater inflater = getLayoutInflater();
+                  android.view.View adView = inflater.inflate(layoutId, adContainer, false);
+                  LOG.info("MainActivity: ✅ 广告布局加载成功");
+
+                  // 使用反射填充广告视图
+                  // populateNativeAdView 的签名是 (NativeAdView, NativeAd)
+                  LOG.info("MainActivity: 填充广告视图...");
+                  Class<?> nativeAdViewClass = Class.forName("com.google.android.gms.ads.nativead.NativeAdView");
+                  Class<?> nativeAdClass = Class.forName("com.google.android.gms.ads.nativead.NativeAd");
+                  java.lang.reflect.Method populateMethod = nativeAdHelperClass.getMethod(
+                      "populateNativeAdView",
+                      nativeAdViewClass,
+                      nativeAdClass
+                  );
+                  // adView 需要转换为 NativeAdView
+                  Object nativeAdView = nativeAdViewClass.cast(adView);
+                  populateMethod.invoke(nativeAdHelper, nativeAdView, nativeAd);
+                  LOG.info("MainActivity: ✅ 广告视图填充完成");
+
+                  // 清除容器中的旧视图并添加新广告
+                  adContainer.removeAllViews();
+                  adContainer.addView(adView);
+                  adContainer.setVisibility(android.view.View.VISIBLE);
+                  LOG.info("MainActivity: ✅✅✅ 原生广告已显示在容器中");
+                  LOG.info("MainActivity: ========== 原生广告显示流程完成 ==========");
+                } catch (Exception e) {
+                  LOG.error("MainActivity: ❌ 显示原生广告失败", e);
+                  LOG.error("MainActivity: 错误详情: {}", e.getMessage(), e);
+                  try {
+                    java.lang.reflect.Method destroyMethod = nativeAd.getClass().getMethod("destroy");
+                    destroyMethod.invoke(nativeAd);
+                  } catch (Exception ex) {
+                    LOG.error("MainActivity: ❌ 销毁广告失败", ex);
+                  }
+                }
+              });
+              return null; // Kotlin Unit
+            }
+            return method.invoke(proxy, args);
+          }
+      );
+
+      // 创建失败回调 Function1<String, Unit>
+      Object onAdFailed = java.lang.reflect.Proxy.newProxyInstance(
+          function1Class.getClassLoader(),
+          new Class<?>[]{function1Class},
+          (proxy, method, args) -> {
+            if (method.getName().equals("invoke")) {
+              String error = (String) args[0]; // Function1.invoke(String) -> Unit
+              LOG.error("MainActivity: ❌❌❌ 原生广告加载失败");
+              LOG.error("MainActivity: 错误信息: {}", error);
+              runOnUiThread(() -> {
+                if (adContainer != null) {
+                  adContainer.setVisibility(android.view.View.GONE);
+                  LOG.info("MainActivity: 隐藏广告容器");
+                }
+              });
+              return null; // Kotlin Unit
+            }
+            return method.invoke(proxy, args);
+          }
+      );
+
+      LOG.info("MainActivity: 调用 loadNativeAd 方法...");
+      loadNativeAdMethod.invoke(nativeAdHelper, null, onAdLoaded, onAdFailed);
+      LOG.info("MainActivity: loadNativeAd 调用完成，等待回调");
+    } catch (Exception e) {
+      LOG.error("Failed to load native ad", e);
+    }
+    */
   }
 
   private void initialiseFabConfirmSelection() {

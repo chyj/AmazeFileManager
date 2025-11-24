@@ -1,8 +1,8 @@
 [versions]
 compileSdk = "34"
-minSdk = "21"
+minSdk = "23"
 targetSdk = "34"
-kotlin = "1.9.25"
+kotlin = "2.0.0"
 ndk = "26.1.10909125"
 
 jacocoAndroid = "0.2.1"
@@ -73,6 +73,8 @@ mpAndroidChart = "v3.0.2"
 concurrentTrees = "2.6.1"
 aboutLibraries = "6.1.1"
 amazeTrashBin = "1.0.10"
+googlePlayServicesAds = "24.4.0"
+googleUmp = "3.2.0"
 
 [libraries]
 gradle = { module = "com.android.tools.build:gradle", version.ref = "gradle" }
@@ -176,3 +178,6 @@ acra-core = { module = "ch.acra:acra-core", version.ref = "acraCore" }
 leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanaryAndroid" }
 
 amaze-trashBin = { module = "com.github.TeamAmaze:AmazeTrashBin", version.ref = "amazeTrashBin" }
+
+google-play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "googlePlayServicesAds" }
+google-ump = { module = "com.google.android.ump:user-messaging-platform", version.ref = "googleUmp" }

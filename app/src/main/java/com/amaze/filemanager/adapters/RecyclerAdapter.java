@@ -135,7 +135,8 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
       TYPE_HEADER_FOLDERS = 1,
       TYPE_HEADER_FILES = 2,
       EMPTY_LAST_ITEM = 3,
-      TYPE_BACK = 4;
+      TYPE_BACK = 4,
+      TYPE_NATIVE_AD = 5;
   private final Logger LOG = LoggerFactory.getLogger(RecyclerAdapter.class);
 
   private static final int VIEW_GENERIC = 0, VIEW_PICTURE = 1, VIEW_APK = 2, VIEW_THUMB = 3;
@@ -168,12 +169,23 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
   private final boolean enableMarquee;
   private final int dragAndDropPreference;
   private final boolean isGrid;
+  
+  // Native ad helper (使用 Object 避免编译时依赖，仅在 play flavor 中可用)
+  private Object nativeAdHelper;
 
   @IntDef({VIEW_GENERIC, VIEW_PICTURE, VIEW_APK, VIEW_THUMB})
   public @interface ViewType {}
 
-  @IntDef({TYPE_ITEM, TYPE_HEADER_FOLDERS, TYPE_HEADER_FILES, EMPTY_LAST_ITEM, TYPE_BACK})
+  @IntDef({TYPE_ITEM, TYPE_HEADER_FOLDERS, TYPE_HEADER_FILES, EMPTY_LAST_ITEM, TYPE_BACK, TYPE_NATIVE_AD})
   public @interface ListElemType {}
+  
+  /**
+   * 设置原生广告辅助类（仅在 play flavor 中可用）
+   * @param nativeAdHelper NativeAdHelper 实例
+   */
+  public void setNativeAdHelper(Object nativeAdHelper) {
+    this.nativeAdHelper = nativeAdHelper;
+  }
 
   public RecyclerAdapter(
       @NonNull PreferenceActivity preferenceActivity,
@@ -599,12 +611,23 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     ArrayList<IconDataParcelable> uris = new ArrayList<>();
     ArrayList<ListItem> listItems = new ArrayList<>();
 
+    int fileCount = 0;
     for (LayoutElementParcelable e : elements) {
       if (invalidate || isItemsDigestedNullOrEmpty()) {
         if (e != null) {
           listItems.add(new ListItem(e.isBack, e));
+          uris.add(e.iconData);
+          fileCount++;
+          
+          // 每5个文件后插入一个原生广告（仅在 play flavor 且 nativeAdHelper 可用时）
+          // 广告位置往前放置，让用户更容易看到
+          if (fileCount % 5 == 0 && nativeAdHelper != null && !e.isBack) {
+            listItems.add(new ListItem(TYPE_NATIVE_AD));
+            uris.add(null);
+          }
+        } else {
+          uris.add(null);
         }
-        uris.add(e != null ? e.iconData : null);
       }
     }
 
@@ -746,6 +769,26 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         view = new View(context);
         view.setMinimumHeight(totalFabHeight + marginFab);
         return new EmptyViewHolder(view);
+      case TYPE_NATIVE_AD:
+        // 仅在 play flavor 中加载原生广告布局
+        try {
+          int layoutId = context.getResources().getIdentifier("ad_unified", "layout", context.getPackageName());
+          if (layoutId != 0) {
+            view = mInflater.inflate(layoutId, parent, false);
+            // 使用反射创建 NativeAdViewHolder
+            Class<?> nativeAdViewHolderClass = Class.forName("com.amaze.filemanager.adapters.holders.NativeAdViewHolder");
+            Class<?> nativeAdViewClass = Class.forName("com.google.android.gms.ads.nativead.NativeAdView");
+            java.lang.reflect.Constructor<?> constructor = nativeAdViewHolderClass.getConstructor(nativeAdViewClass);
+            Object nativeAdView = nativeAdViewClass.cast(view);
+            return (RecyclerView.ViewHolder) constructor.newInstance(nativeAdView);
+          }
+        } catch (Exception e) {
+          LOG.warn("Failed to create native ad view holder", e);
+        }
+        // 如果失败，创建一个空的 ViewHolder
+        view = new View(context);
+        view.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0));
+        return new EmptyViewHolder(view);
       default:
         throw new IllegalArgumentException("Illegal: " + viewType);
     }
@@ -753,6 +796,14 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
   @Override
   public void onBindViewHolder(@NonNull final RecyclerView.ViewHolder vholder, int position) {
+    // 处理原生广告 ViewHolder
+    if (getItemsDigested() != null 
+        && position < getItemsDigested().size() 
+        && getItemsDigested().get(position).specialType == TYPE_NATIVE_AD) {
+      bindNativeAdViewHolder(vholder, position);
+      return;
+    }
+    
     if (!(vholder instanceof ItemViewHolder)) {
       return;
     }
@@ -1169,6 +1220,82 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     }
     if (getBoolean(PREFERENCE_SHOW_PERMISSIONS)) {
       holder.perm.setText(rowItem.permissions);
+    }
+  }
+
+  /**
+   * 绑定原生广告 ViewHolder
+   */
+  private void bindNativeAdViewHolder(@NonNull RecyclerView.ViewHolder vholder, int position) {
+    if (nativeAdHelper == null) {
+      LOG.debug("NativeAdHelper is null, skipping ad binding");
+      return;
+    }
+
+    try {
+      // 从 ViewHolder 的 itemView 获取 NativeAdView（因为 NativeAdViewHolder 的 itemView 就是 NativeAdView）
+      Class<?> nativeAdViewClass = Class.forName("com.google.android.gms.ads.nativead.NativeAdView");
+      Object nativeAdView = nativeAdViewClass.cast(vholder.itemView);
+
+      // 使用反射调用 NativeAdHelper.loadNativeAd
+      Class<?> nativeAdHelperClass = nativeAdHelper.getClass();
+      Class<?> function1Class = Class.forName("kotlin.jvm.functions.Function1");
+      Class<?> nativeAdClass = Class.forName("com.google.android.gms.ads.nativead.NativeAd");
+
+      java.lang.reflect.Method loadNativeAdMethod = nativeAdHelperClass.getMethod(
+          "loadNativeAd",
+          String.class,
+          function1Class,
+          function1Class
+      );
+
+      // 创建成功回调 Function1<NativeAd, Unit>
+      Object onAdLoaded = java.lang.reflect.Proxy.newProxyInstance(
+          function1Class.getClassLoader(),
+          new Class<?>[]{function1Class},
+          (proxy, method, args) -> {
+            if (method.getName().equals("invoke")) {
+              Object nativeAd = args[0];
+              // 在主线程填充广告视图
+              if (mainFragment.getMainActivity() != null) {
+                mainFragment.getMainActivity().runOnUiThread(() -> {
+                  try {
+                    java.lang.reflect.Method populateMethod = nativeAdHelperClass.getMethod(
+                        "populateNativeAdView",
+                        nativeAdViewClass,
+                        nativeAdClass
+                    );
+                    populateMethod.invoke(nativeAdHelper, nativeAdView, nativeAd);
+                    LOG.debug("Native ad populated successfully at position {}", position);
+                  } catch (Exception e) {
+                    LOG.error("Failed to populate native ad view", e);
+                  }
+                });
+              }
+              return null; // Kotlin Unit
+            }
+            return method.invoke(proxy, args);
+          }
+      );
+
+      // 创建失败回调 Function1<String, Unit>
+      Object onAdFailed = java.lang.reflect.Proxy.newProxyInstance(
+          function1Class.getClassLoader(),
+          new Class<?>[]{function1Class},
+          (proxy, method, args) -> {
+            if (method.getName().equals("invoke")) {
+              String error = (String) args[0];
+              LOG.warn("Native ad failed to load at position {}: {}", position, error);
+              return null; // Kotlin Unit
+            }
+            return method.invoke(proxy, args);
+          }
+      );
+
+      // 加载广告
+      loadNativeAdMethod.invoke(nativeAdHelper, null, onAdLoaded, onAdFailed);
+    } catch (Exception e) {
+      LOG.error("Failed to bind native ad view holder", e);
     }
   }
 

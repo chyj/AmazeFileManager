@@ -102,6 +102,15 @@
             android:layout_gravity="bottom"
             android:visibility="gone"
             />
+        
+        <!-- AdMob 原生广告容器 -->
+        <FrameLayout
+            android:id="@+id/ad_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
     <com.amaze.filemanager.ui.views.drawer.CustomNavigationView
         android:id="@+id/navigation"

@@ -877,6 +877,20 @@ public class MainFragment extends Fragment
               listElements,
               requireContext(),
               grid);
+      
+      // 设置原生广告辅助类（仅在 play flavor 中可用）
+      if (getMainActivity() != null && !com.amaze.filemanager.BuildConfig.IS_VERSION_FDROID) {
+        try {
+          java.lang.reflect.Field nativeAdHelperField = getMainActivity().getClass().getDeclaredField("nativeAdHelper");
+          nativeAdHelperField.setAccessible(true);
+          Object nativeAdHelper = nativeAdHelperField.get(getMainActivity());
+          if (nativeAdHelper != null) {
+            adapter.setNativeAdHelper(nativeAdHelper);
+          }
+        } catch (Exception e) {
+          LOG.debug("Failed to set native ad helper to adapter", e);
+        }
+      }
     } else {
       adapter.setItems(listView, mainFragmentViewModel.getListElements());
     }
