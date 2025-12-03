@@ -353,9 +353,10 @@ public class MainActivity extends PermissionsActivity
     intent = getIntent();
 
     dataUtils = DataUtils.getInstance();
-    if (savedInstanceState != null) {
-      listItemSelected = savedInstanceState.getBoolean(KEY_SELECTED_LIST_ITEM, false);
-    }
+    // 不恢复上次的状态，每次打开都是初始界面
+    // if (savedInstanceState != null) {
+    //   listItemSelected = savedInstanceState.getBoolean(KEY_SELECTED_LIST_ITEM, false);
+    // }
 
     initialisePreferences();
     initializeInteractiveShell();
@@ -456,7 +457,8 @@ public class MainActivity extends PermissionsActivity
   }
 
   public void invalidateFragmentAndBundle(Bundle savedInstanceState, boolean isCloudRefresh) {
-    if (savedInstanceState == null) {
+    // 强制使用初始界面，不恢复上次的状态
+    // if (savedInstanceState == null) {
       if (openProcesses) {
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         transaction.replace(
@@ -521,15 +523,15 @@ public class MainActivity extends PermissionsActivity
           goToMain(null);
         }
       }
-    } else {
-      pasteHelper = savedInstanceState.getParcelable(PASTEHELPER_BUNDLE);
-      oppathe = savedInstanceState.getString(KEY_OPERATION_PATH);
-      oppathe1 = savedInstanceState.getString(KEY_OPERATED_ON_PATH);
-      oparrayList = savedInstanceState.getParcelableArrayList(KEY_OPERATIONS_PATH_LIST);
-      operation = savedInstanceState.getInt(KEY_OPERATION);
-      int selectedStorage = savedInstanceState.getInt(KEY_DRAWER_SELECTED, 0);
-      getDrawer().selectCorrectDrawerItem(selectedStorage);
-    }
+    // } else {
+    //   pasteHelper = savedInstanceState.getParcelable(PASTEHELPER_BUNDLE);
+    //   oppathe = savedInstanceState.getString(KEY_OPERATION_PATH);
+    //   oppathe1 = savedInstanceState.getString(KEY_OPERATED_ON_PATH);
+    //   oparrayList = savedInstanceState.getParcelableArrayList(KEY_OPERATIONS_PATH_LIST);
+    //   operation = savedInstanceState.getInt(KEY_OPERATION);
+    //   int selectedStorage = savedInstanceState.getInt(KEY_DRAWER_SELECTED, 0);
+    //   getDrawer().selectCorrectDrawerItem(selectedStorage);
+    // }
   }
 
   @Override

@@ -138,39 +138,42 @@ public class TabFragment extends Fragment {
     viewPager.registerOnPageChangeCallback(new OnPageChangeCallbackImpl());
 
     sectionsPagerAdapter = new ScreenSlidePagerAdapter(requireActivity());
-    if (savedInstanceState == null) {
-      int lastOpenTab = sharedPrefs.getInt(PREFERENCE_CURRENT_TAB, DEFAULT_CURRENT_TAB);
-      MainActivity.currentTab = lastOpenTab;
+    // 强制使用初始状态，不恢复上次的状态
+    // if (savedInstanceState == null) {
+      // 清空fragments列表，确保使用新的Fragment
+      fragments.clear();
+      // 使用默认标签页，而不是保存的标签页
+      MainActivity.currentTab = DEFAULT_CURRENT_TAB;
 
       refactorDrawerStorages(true, hideFab);
 
       viewPager.setAdapter(sectionsPagerAdapter);
 
       try {
-        viewPager.setCurrentItem(lastOpenTab, true);
+        viewPager.setCurrentItem(DEFAULT_CURRENT_TAB, true);
         if (circleDrawable1 != null && circleDrawable2 != null) {
           updateIndicator(viewPager.getCurrentItem());
         }
       } catch (Exception e) {
         LOG.warn("failed to set current viewpager item", e);
       }
-    } else {
-      fragments.clear();
-      try {
-        fragments.add(0, fragmentManager.getFragment(savedInstanceState, KEY_FRAGMENT_0));
-        fragments.add(1, fragmentManager.getFragment(savedInstanceState, KEY_FRAGMENT_1));
-      } catch (Exception e) {
-        LOG.warn("failed to clear fragments", e);
-      }
+    // } else {
+    //   fragments.clear();
+    //   try {
+    //     fragments.add(0, fragmentManager.getFragment(savedInstanceState, KEY_FRAGMENT_0));
+    //     fragments.add(1, fragmentManager.getFragment(savedInstanceState, KEY_FRAGMENT_1));
+    //   } catch (Exception e) {
+    //     LOG.warn("failed to clear fragments", e);
+    //   }
 
-      sectionsPagerAdapter = new ScreenSlidePagerAdapter(requireActivity());
+    //   sectionsPagerAdapter = new ScreenSlidePagerAdapter(requireActivity());
 
-      viewPager.setAdapter(sectionsPagerAdapter);
-      int pos1 = savedInstanceState.getInt(KEY_POSITION, 0);
-      MainActivity.currentTab = pos1;
-      viewPager.setCurrentItem(pos1);
-      sectionsPagerAdapter.notifyDataSetChanged();
-    }
+    //   viewPager.setAdapter(sectionsPagerAdapter);
+    //   int pos1 = savedInstanceState.getInt(KEY_POSITION, 0);
+    //   MainActivity.currentTab = pos1;
+    //   viewPager.setCurrentItem(pos1);
+    //   sectionsPagerAdapter.notifyDataSetChanged();
+    // }
 
     if (indicator != null) indicator.setViewPager(viewPager);
 
@@ -408,15 +411,37 @@ public class TabFragment extends Fragment {
    */
   public void refactorDrawerStorages(boolean addTab, boolean hideFabInCurrentMainFragment) {
     TabHandler tabHandler = TabHandler.getInstance();
-    Tab tab1 = tabHandler.findTab(1);
-    Tab tab2 = tabHandler.findTab(2);
-    Tab[] tabs = tabHandler.getAllTabs();
+    // 强制使用初始路径，不从数据库恢复保存的路径
     String firstTabPath = requireMainActivity().getDrawer().getFirstPath();
     String secondTabPath = requireMainActivity().getDrawer().getSecondPath();
 
-    if (tabs == null || tabs.length < 1 || tab1 == null || tab2 == null) {
-      // creating tabs in db for the first time, probably the first launch of
-      // app, or something got corrupted
+    // 总是使用初始路径，就像第一次启动应用一样
+    // 如果path不为null，说明是通过Intent传递的路径，使用这个路径
+    if (path != null && path.length() != 0) {
+      // 通过Intent传递的路径，使用这个路径
+      String currentFirstTab = Utils.isNullOrEmpty(firstTabPath) ? "/" : firstTabPath;
+      String currentSecondTab = Utils.isNullOrEmpty(secondTabPath) ? firstTabPath : secondTabPath;
+      
+      // 创建临时Tab对象用于addTab方法
+      Tab tempTab1 = new Tab(1, currentSecondTab, currentSecondTab);
+      Tab tempTab2 = new Tab(2, currentFirstTab, currentFirstTab);
+      
+      if (MainActivity.currentTab == 0) {
+        addTab(tempTab1, path, hideFabInCurrentMainFragment);
+        addTab(tempTab2, "", false);
+      } else if (MainActivity.currentTab == 1) {
+        addTab(tempTab1, "", false);
+        addTab(tempTab2, path, hideFabInCurrentMainFragment);
+      } else {
+        addTab(tempTab1, path, hideFabInCurrentMainFragment);
+        addTab(tempTab2, "", false);
+      }
+      
+      // 更新数据库
+      tabHandler.addTab(new Tab(1, currentSecondTab, currentSecondTab)).blockingAwait();
+      tabHandler.addTab(new Tab(2, currentFirstTab, currentFirstTab)).blockingAwait();
+    } else {
+      // 正常启动，使用初始路径
       String currentFirstTab = Utils.isNullOrEmpty(firstTabPath) ? "/" : firstTabPath;
       String currentSecondTab = Utils.isNullOrEmpty(secondTabPath) ? firstTabPath : secondTabPath;
       if (addTab) {
@@ -428,21 +453,6 @@ public class TabFragment extends Fragment {
 
       if (currentFirstTab.equalsIgnoreCase("/")) {
         sharedPrefs.edit().putBoolean(PreferencesConstants.PREFERENCE_ROOTMODE, true).apply();
-      }
-    } else {
-      if (path != null && path.length() != 0) {
-        if (MainActivity.currentTab == 0) {
-          addTab(tab1, path, hideFabInCurrentMainFragment);
-          addTab(tab2, "", false);
-        }
-
-        if (MainActivity.currentTab == 1) {
-          addTab(tab1, "", false);
-          addTab(tab2, path, hideFabInCurrentMainFragment);
-        }
-      } else {
-        addTab(tab1, "", false);
-        addTab(tab2, "", false);
       }
     }
   }
